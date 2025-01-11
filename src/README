@@ -1,0 +1,61 @@
+<Copyright: Birleanu Teodor Matei >                                                         07.01.2025                                                           
+teodor.matei.birleanu@gmail.com
+
+
+                                     Tema2  
+                           ALGORITMI PARALELI SI DISTRIBUITI
+                                Protocolul BitTorrent
+
+
+    In cele ce urmeaza voi descrie cum am implementate protcolul BitTorrent.
+    Tin sa mentionez faptul ca in legatura cu rularea pe docker am o problema. Primesc
+segmentation fault mereu la 3 teste. Eu am rulat de multe ori fiecare test manual, am
+verificat  conform forumului workload-ul fiecarui client si am observat ca era echilibrat. Am cuantificat de 
+asemenea numarul de mesaje trimise intrucat pe forum vazusem ca poate fi o problema. Din pacate
+nu am rezolvat, insa pe checker ul local iau mereu maxim. Nu stiu cum as putea rezolva intrucat am
+verificat si respectat toate cerintele si am urmat toate sfaturile de pe forum.
+    In primul rand ca structuri pentru a stoca datele am folosit urmatoarele:
+    - am folosit un map care contine un string caruia ii este asociat o strucutra
+    specifica tracker ului ce contine numele fisierului ,numarul de segmente, hash-urile
+    segmentelor in ordinea si de asemenea listele de seeds si peers.
+    - o structura pentru fisiere ce retine numele fisiereului numarul de segmente o variabila
+    bool pentru a retine daca fisierul a fost downloadat si de asemenea vectorul de segmente.
+    - pentru fisierele dorite am tinut minte doar numele fisierelor si un bool care
+    marcheaza daca le am downloadat sau nu
+    - pentru structura de client am retinut vector de fisiere downloadate, fisiere detinute
+    si fisiere dorite. Pentru a facilita implementarea , voi aminti exact la 
+    ce pas am folosit acesta idee, am definit un map "liveupdate" care retine fisierul si ultimul
+    segment descarcat din el atunci cand un fisier incepe sa l descarce pentru a deveni automat si
+    uploader pentru segmentele pe care incepe sa le detina.
+
+    Am inceput prin a citi fisierele de input si a trimite la tracker pentru a initializa
+informatiile despre fisiere. Dupa care am realizat o functie sendtotracker cu
+ajutorul careia am structura mesajul astfel : "numarul de fisiere" + "nume_fisier" + "nr de
+segmente" + "lista de segmente" . Dupa care am trimis acest mesaj la tracker cu tagul INIT_MSG.
+In tracker cu ajutorul functiei MPI_Probe am asteptat mesaj de la toti clientii si am initializat
+map ul trackerului cu informatiile despre fisiere. Dupa ce toti clientii au trimis mesajul de 
+init tracker ul a trimis fiecaruia un mesaj cu tag-ul START_TAG. Dupa aceasta fiecare client va
+parcurge lista de fisiere dorite si va incepe comunicarea cu tracker-ul. Pentru fiecare fisier ii trimit
+tracker ului un mesaj cu numele fisierului si tag-ul REQUEST_TAG. Tracker-ul va consulta informatiile
+din faza de initializare si ii va triimite informatiile intr un string astfel: size ul swarm ului si swarm ul 
+fisierului dupa care nr de segmente si hash ul segmentelor. Dupa aceasta , l-am adaugat in lista de peers a 
+fisierului pentru a putea uploada si el segmente chiar daca nu a downloadat intreg fisierul. Mesajul trimis
+de tracker va fi trimis cu tag-ul SWARM_TAG. 
+        In thread-ul de download procesez informatiile de la tracker dupa care voi voi cere in ordine segmente 
+de la lista de swarm.Pentru fiecare segment voi alege din lista de swarm random un client care-l detine. Intrucat 
+eu adaug in lista de peers clientul imediat cum trimite cererea REQUEST_TAG la tracker, va exista  cazul in care eu pot cere de la un 
+client un segment iar acesta sa nu fi apucat sa l descarce inca si de aceea cand cer un segment de la un client 
+exista posibilitatea ca acel client sa raspunda cu mesajul “NO”. Voi trimite clientilor numele fisierului + indexul 
+segmentului si hash ul segmentului. Mesajul va fi trimis cu tag-ul SEGREQ_TAG , dupa care voi astepta un mesaj cu 
+SEGRESP_TAG. Daca mesajul este “OK” voi adauga indexul segmentului in acel map liveupdate. Practic in liveupdate 
+retin ultimul segment descarcat din cadrul  unui fisier in curs de descarcare. Atunci cand termin un fisier il marchez ca downloadat in 
+structura de client. Initial am accesat fisierul prin functia getDownloadedFile care imi trimite 
+indexul fisierul din vectorul de fisiere iar daca nu il aveam deja downloadat il adaug in lista si il voi marca ca 
+downloadat dupa ce descarc toate segmentele. Dupa ce termin downloadarea il anunt pe tracker care il va adauga in lista 
+de seeds pe cliemtul respectiv .Mesajul va avea tag-ul FINDOWN_TAG. La finalul obtinerii tuturor fisierelor voi anuntat tracker-ul ca am terminat 
+downloadarea. Mesajul va avea tag-ul FINAL_TAG. In thread-ul de upload voi verifica daca am primit cu mesaj cu tag-ul SEGREQ_TAG 
+si voi verifica daca am segmentul. In functia haveSegm, verifica daca am fisierul in lista de downloadate, dupa care in lista de 
+fisiere detinute dupa care voi voi verifica daca este vorba de un fisier in curs de descarcare si daca am apucat deja sa descarc 
+acel segment il voi trimite intrucat poate fi uploadat. Dupa aceasta , in tracker atunci cand voi constata ca toate thread-urile 
+de download au terminat voi trimite un mesaj cu tag-ul TURNOFF_TAG pentru fiecare thread de upload.
+    Va multumesc pentru atentie!
